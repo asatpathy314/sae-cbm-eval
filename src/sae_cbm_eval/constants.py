@@ -1,0 +1,37 @@
+from __future__ import annotations
+
+SAE_REPO_ID = (
+    "Prisma-Multimodal/"
+    "sparse-autoencoder-clip-b-32-sae-vanilla-x64-layer-11-hook_resid_post-l1-8e-05"
+)
+SAE_WEIGHT_FILENAME = "n_images_2600058.pt"
+SAE_CONFIG_FILENAME = "config.json"
+
+CLIP_MODEL_ID = "open-clip:laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K"
+OPEN_CLIP_FALLBACK_MODEL = "ViT-B-32"
+OPEN_CLIP_FALLBACK_PRETRAINED = "datacomp_xl_s13b_b90k"
+PREPROCESS_ID = (
+    "vit_prisma.transforms.model_transforms.get_model_transforms("
+    "open-clip:laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K)"
+)
+
+EXPECTED_HOOK_LAYER = 11
+EXPECTED_HOOK_SUBTYPE = "hook_resid_post"
+EXPECTED_HOOK_NAME = f"blocks.{EXPECTED_HOOK_LAYER}.{EXPECTED_HOOK_SUBTYPE}"
+
+EXPECTED_INPUT_DIM = 768
+EXPECTED_SAE_DIM = 49_152
+EXPECTED_CONTEXT_SIZE = 50
+EXPECTED_ACTIVATION_FN = "relu"
+EXPECTED_ARCHITECTURE = "standard"
+EXPECTED_MODEL_CLASS_NAME = "HookedViT"
+RANDOM_SEED = 42
+TOKEN_POLICY_CLS_ONLY = "cls_only"
+
+CUB_DOWNLOAD_URL = "https://data.caltech.edu/records/65de6-vp158/files/CUB_200_2011.tgz"
+CUB_ARCHIVE_NAME = "CUB_200_2011.tgz"
+CUB_DIR_NAME = "CUB_200_2011"
+EXPECTED_TOTAL_IMAGES = 11_788
+EXPECTED_TRAIN_IMAGES = 5_994
+EXPECTED_TEST_IMAGES = 5_794
+EXPECTED_NUM_CLASSES = 200

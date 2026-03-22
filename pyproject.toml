@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sae-cbm-eval"
+version = "0.1.0"
+description = "SAE-CBM feature pruning evaluation pipeline on CUB-200."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "huggingface-hub>=1.0",
+    "matplotlib",
+    "numpy",
+    "open-clip-torch",
+    "pandas",
+    "Pillow",
+    "python-dotenv>=1.0",
+    "scikit-learn>=1.3",
+    "scipy",
+    "torch>=2.1",
+    "torchvision",
+    "tqdm",
+    "vit-prisma @ git+https://github.com/Prisma-Multimodal/ViT-Prisma.git@46d21f0bb1a4e23aaad60ff777e5fa3243e09383",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
