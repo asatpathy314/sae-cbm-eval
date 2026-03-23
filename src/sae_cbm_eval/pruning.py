@@ -187,8 +187,10 @@ def prune_to_k(
     prune_fraction: float,
     max_iter: int,
     random_state: int,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[np.ndarray, Any]:
     active = np.arange(Z_fit.shape[1], dtype=np.int64)
+    round_idx = 0
 
     while len(active) > k_target:
         clf = build_multinomial_logreg(
@@ -197,6 +199,17 @@ def prune_to_k(
             random_state=random_state,
         )
         clf.fit(Z_fit[:, active], y_fit)
+        n_iter = summarize_iterations(clf)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "phase": "prune",
+                    "round": round_idx,
+                    "n_features": int(len(active)),
+                    "n_iter": n_iter,
+                    "converged": bool(n_iter < max_iter),
+                }
+            )
         importance = compute_feature_importance(clf.coef_, sigma_fit[active])
         prune_count = compute_prune_count(
             n_active=len(active),
@@ -207,6 +220,7 @@ def prune_to_k(
         keep_mask = np.ones(len(active), dtype=bool)
         keep_mask[prune_idx] = False
         active = active[keep_mask]
+        round_idx += 1
 
     clf_final = build_multinomial_logreg(
         C=C,
@@ -214,4 +228,15 @@ def prune_to_k(
         random_state=random_state,
     )
     clf_final.fit(Z_fit[:, active], y_fit)
+    n_iter = summarize_iterations(clf_final)
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "phase": "final",
+                "round": round_idx,
+                "n_features": int(len(active)),
+                "n_iter": n_iter,
+                "converged": bool(n_iter < max_iter),
+            }
+        )
     return active, clf_final
