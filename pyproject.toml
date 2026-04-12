@@ -21,6 +21,7 @@ dependencies = [
     "torch>=2.1",
     "torchvision",
     "tqdm",
+    "openai>=1.0",
     "vit-prisma @ git+https://github.com/Prisma-Multimodal/ViT-Prisma.git@46d21f0bb1a4e23aaad60ff777e5fa3243e09383",
 ]
 
