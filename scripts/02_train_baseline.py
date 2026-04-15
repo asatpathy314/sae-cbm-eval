@@ -26,7 +26,7 @@ from sae_cbm_eval.constants import (
     HEURISTIC_MIN_BASELINE_VAL_ACC,
     RANDOM_SEED,
     SAE_REPO_ID,
-    TOKEN_POLICY_CLS_ONLY,
+    TOKEN_POLICY_ALL_MAXPOOL,
 )
 from sae_cbm_eval.runtime import (
     configure_runtime_logging,
@@ -142,9 +142,9 @@ def validate_stage1_outputs(
             f"Expected y_train shape {(EXPECTED_TRAIN_IMAGES,)}, observed {tuple(y_train.shape)}"
         )
 
-    if extraction_meta.get("token_policy") != TOKEN_POLICY_CLS_ONLY:
+    if extraction_meta.get("token_policy") != TOKEN_POLICY_ALL_MAXPOOL:
         raise ValueError(
-            "Stage 1 extraction metadata did not record the required CLS-only token policy."
+            "Stage 1 extraction metadata did not record the required all-tokens-maxpool policy."
         )
 
     n_classes = int(np.unique(y_train).size)

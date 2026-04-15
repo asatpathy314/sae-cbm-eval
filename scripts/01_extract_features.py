@@ -14,19 +14,13 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-warnings.filterwarnings(
-    "ignore",
-    message=r".*Plotly version 5\.19\.0, which is not compatible with this version of Kaleido.*",
-)
-warnings.filterwarnings("ignore", category=UserWarning, module=r"kaleido\._sync_server")
-
 from sae_cbm_eval.constants import (
     CLIP_MODEL_ID,
     CUB_DIR_NAME,
     CUB_DOWNLOAD_URL,
     EXPECTED_CONTEXT_SIZE,
-    EXPECTED_HOOK_NAME,
     EXPECTED_HOOK_LAYER,
+    EXPECTED_HOOK_NAME,
     EXPECTED_INPUT_DIM,
     EXPECTED_SAE_DIM,
     PREPROCESS_ID,
@@ -34,7 +28,7 @@ from sae_cbm_eval.constants import (
     SAE_CONFIG_FILENAME,
     SAE_REPO_ID,
     SAE_WEIGHT_FILENAME,
-    TOKEN_POLICY_CLS_ONLY,
+    TOKEN_POLICY_ALL_MAXPOOL,
 )
 from sae_cbm_eval.cub import (
     CUBImageDataset,
@@ -63,12 +57,19 @@ from sae_cbm_eval.runtime import (
     write_run_manifest,
 )
 
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Plotly version 5\.19\.0, which is not compatible with this version of Kaleido.*",
+)
+warnings.filterwarnings("ignore", category=UserWarning, module=r"kaleido\._sync_server")
 
 SCRIPT_NAME = "01_extract_features"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Extract SAE features for CUB-200-2011.")
+    parser = argparse.ArgumentParser(
+        description="Extract SAE features for CUB-200-2011."
+    )
     parser.add_argument(
         "--dataset-root",
         type=Path,
@@ -180,6 +181,7 @@ def build_dataloader(
     *,
     batch_size: int,
     num_workers: int,
+    device: str,
 ) -> DataLoader:
     dataset = CUBImageDataset(dataset_root, records, transform)
     return DataLoader(
@@ -187,11 +189,13 @@ def build_dataloader(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=torch.cuda.is_available(),
+        pin_memory=(device.startswith("cuda")),
     )
 
 
-def save_labels(features_dir: Path, train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+def save_labels(
+    features_dir: Path, train_df: pd.DataFrame, test_df: pd.DataFrame
+) -> None:
     np.save(features_dir / "y_train.npy", train_df["class_id"].to_numpy(dtype=np.int64))
     np.save(features_dir / "y_test.npy", test_df["class_id"].to_numpy(dtype=np.int64))
 
@@ -251,7 +255,7 @@ def build_extraction_meta(
         "image_size": 224,
         "hook_name": EXPECTED_HOOK_NAME,
         "layer": EXPECTED_HOOK_LAYER,
-        "token_policy": TOKEN_POLICY_CLS_ONLY,
+        "token_policy": TOKEN_POLICY_ALL_MAXPOOL,
         "n_features": EXPECTED_SAE_DIM,
         "input_dim": EXPECTED_INPUT_DIM,
         "vit_prisma_version": get_package_version("vit-prisma"),
@@ -341,6 +345,7 @@ def main() -> int:
             preprocess,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            device=device,
         )
         test_loader = build_dataloader(
             dataset_root,
@@ -348,6 +353,7 @@ def main() -> int:
             preprocess,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            device=device,
         )
 
         logging.info("Extracting %s training images", len(train_df))

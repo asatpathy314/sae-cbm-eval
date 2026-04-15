@@ -9,13 +9,6 @@ from typing import Any
 
 import torch
 from huggingface_hub import hf_hub_download
-
-warnings.filterwarnings(
-    "ignore",
-    message=r".*Plotly version 5\.19\.0, which is not compatible with this version of Kaleido.*",
-)
-warnings.filterwarnings("ignore", category=UserWarning, module=r"kaleido\._sync_server")
-
 from vit_prisma.models.model_loader import load_config
 from vit_prisma.sae import SparseAutoencoder
 from vit_prisma.utils.enums import ModelType
@@ -48,12 +41,18 @@ from sae_cbm_eval.runtime import (
     write_run_manifest,
 )
 
-
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Plotly version 5\.19\.0, which is not compatible with this version of Kaleido.*",
+)
+warnings.filterwarnings("ignore", category=UserWarning, module=r"kaleido\._sync_server")
 SCRIPT_NAME = "00_verify_sae"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify the locked SAE checkpoint contract.")
+    parser = argparse.ArgumentParser(
+        description="Verify the locked SAE checkpoint contract."
+    )
     parser.add_argument("--repo-id", default=SAE_REPO_ID)
     parser.add_argument("--weight-filename", default=SAE_WEIGHT_FILENAME)
     parser.add_argument("--config-filename", default=SAE_CONFIG_FILENAME)
@@ -85,7 +84,9 @@ def load_raw_config(config_path: Path) -> dict[str, Any]:
     return json.loads(config_path.read_text())
 
 
-def verify_checkpoint_metadata(raw_config: dict[str, Any], clip_model_id: str) -> dict[str, Any]:
+def verify_checkpoint_metadata(
+    raw_config: dict[str, Any], clip_model_id: str
+) -> dict[str, Any]:
     problems: list[str] = []
     observed_hook_name = (
         f"blocks.{raw_config.get('hook_point_layer')}.{raw_config.get('layer_subtype')}"
@@ -98,12 +99,24 @@ def verify_checkpoint_metadata(raw_config: dict[str, Any], clip_model_id: str) -
         EXPECTED_MODEL_CLASS_NAME,
     )
     expect_equal(problems, "model_name", raw_config.get("model_name"), clip_model_id)
-    expect_equal(problems, "hook_point_layer", raw_config.get("hook_point_layer"), EXPECTED_HOOK_LAYER)
-    expect_equal(problems, "layer_subtype", raw_config.get("layer_subtype"), EXPECTED_HOOK_SUBTYPE)
+    expect_equal(
+        problems,
+        "hook_point_layer",
+        raw_config.get("hook_point_layer"),
+        EXPECTED_HOOK_LAYER,
+    )
+    expect_equal(
+        problems,
+        "layer_subtype",
+        raw_config.get("layer_subtype"),
+        EXPECTED_HOOK_SUBTYPE,
+    )
     expect_equal(problems, "hook_name", observed_hook_name, EXPECTED_HOOK_NAME)
     expect_equal(problems, "d_in", raw_config.get("d_in"), EXPECTED_INPUT_DIM)
     expect_equal(problems, "d_sae", raw_config.get("d_sae"), EXPECTED_SAE_DIM)
-    expect_equal(problems, "context_size", raw_config.get("context_size"), EXPECTED_CONTEXT_SIZE)
+    expect_equal(
+        problems, "context_size", raw_config.get("context_size"), EXPECTED_CONTEXT_SIZE
+    )
     expect_equal(
         problems,
         "activation_fn_str",
@@ -133,8 +146,18 @@ def verify_matching_clip_config(clip_model_id: str) -> dict[str, Any]:
         token_count = (image_size // patch_size) ** 2 + 1
 
     problems: list[str] = []
-    expect_equal(problems, "clip_cfg.model_name", getattr(clip_cfg, "model_name", None), clip_model_id)
-    expect_equal(problems, "clip_cfg.d_model", getattr(clip_cfg, "d_model", None), EXPECTED_INPUT_DIM)
+    expect_equal(
+        problems,
+        "clip_cfg.model_name",
+        getattr(clip_cfg, "model_name", None),
+        clip_model_id,
+    )
+    expect_equal(
+        problems,
+        "clip_cfg.d_model",
+        getattr(clip_cfg, "d_model", None),
+        EXPECTED_INPUT_DIM,
+    )
     expect_equal(problems, "clip_cfg.image_size", image_size, 224)
     expect_equal(problems, "clip_cfg.patch_size", patch_size, 32)
     expect_equal(problems, "clip token count", token_count, EXPECTED_CONTEXT_SIZE)
@@ -162,13 +185,33 @@ def verify_weight_shapes(weights_path: Path) -> dict[str, Any]:
         )
 
     if "W_enc" in state_dict:
-        expect_equal(problems, "W_enc.shape", tuple(state_dict["W_enc"].shape), (EXPECTED_INPUT_DIM, EXPECTED_SAE_DIM))
+        expect_equal(
+            problems,
+            "W_enc.shape",
+            tuple(state_dict["W_enc"].shape),
+            (EXPECTED_INPUT_DIM, EXPECTED_SAE_DIM),
+        )
     if "W_dec" in state_dict:
-        expect_equal(problems, "W_dec.shape", tuple(state_dict["W_dec"].shape), (EXPECTED_SAE_DIM, EXPECTED_INPUT_DIM))
+        expect_equal(
+            problems,
+            "W_dec.shape",
+            tuple(state_dict["W_dec"].shape),
+            (EXPECTED_SAE_DIM, EXPECTED_INPUT_DIM),
+        )
     if "b_enc" in state_dict:
-        expect_equal(problems, "b_enc.shape", tuple(state_dict["b_enc"].shape), (EXPECTED_SAE_DIM,))
+        expect_equal(
+            problems,
+            "b_enc.shape",
+            tuple(state_dict["b_enc"].shape),
+            (EXPECTED_SAE_DIM,),
+        )
     if "b_dec" in state_dict:
-        expect_equal(problems, "b_dec.shape", tuple(state_dict["b_dec"].shape), (EXPECTED_INPUT_DIM,))
+        expect_equal(
+            problems,
+            "b_dec.shape",
+            tuple(state_dict["b_dec"].shape),
+            (EXPECTED_INPUT_DIM,),
+        )
 
     return {
         "state_dict_keys": sorted(observed_keys),
@@ -190,18 +233,26 @@ def verify_sae_runtime(weights_path: Path, config_path: Path) -> dict[str, Any]:
     )
     sae.eval()
 
-    dummy = torch.zeros((1, EXPECTED_INPUT_DIM), dtype=torch.float32, device=sae.W_enc.device)
+    dummy = torch.zeros(
+        (1, EXPECTED_INPUT_DIM), dtype=torch.float32, device=sae.W_enc.device
+    )
     sae_in, features = sae.encode(dummy)
 
     problems: list[str] = []
     expect_equal(problems, "sae runtime input dim", sae.d_in, EXPECTED_INPUT_DIM)
     expect_equal(problems, "sae runtime feature dim", sae.d_sae, EXPECTED_SAE_DIM)
-    expect_equal(problems, "dummy sae_in shape", tuple(sae_in.shape), (1, EXPECTED_INPUT_DIM))
-    expect_equal(problems, "dummy feature shape", tuple(features.shape), (1, EXPECTED_SAE_DIM))
+    expect_equal(
+        problems, "dummy sae_in shape", tuple(sae_in.shape), (1, EXPECTED_INPUT_DIM)
+    )
+    expect_equal(
+        problems, "dummy feature shape", tuple(features.shape), (1, EXPECTED_SAE_DIM)
+    )
 
     z_min = float(features.min().item())
     if z_min < -1e-6:
-        problems.append(f"dummy feature minimum should be non-negative for ReLU SAE, observed {z_min}")
+        problems.append(
+            f"dummy feature minimum should be non-negative for ReLU SAE, observed {z_min}"
+        )
 
     return {
         "observed_encoder_call_used": "sae.encode(dummy)[1]",

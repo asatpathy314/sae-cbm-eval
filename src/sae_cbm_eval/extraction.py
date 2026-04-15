@@ -88,8 +88,11 @@ def extract_split_features(
             activations = cache[hook_name]
             observed_hook_shape = list(activations.shape)
 
-            h_cls = activations[:, 0, :]
-            _, features = sae.encode(h_cls)
+            B, T, D = activations.shape
+            h_flat = activations.reshape(B * T, D)
+            _, feat_flat = sae.encode(h_flat)
+            feat_all = feat_flat.reshape(B, T, -1)
+            features = feat_all.max(dim=1).values
 
             if features.ndim != 2 or features.shape[1] != n_features:
                 raise ValueError(
