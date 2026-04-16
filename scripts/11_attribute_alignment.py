@@ -51,6 +51,10 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=["0.01", "0.02", "0.05"],
     )
+    parser.add_argument("--min-certainty", type=int, default=3,
+                        help="Minimum CUB certainty_id for attribute labels (1-4).")
+    parser.add_argument("--split", default="test", choices=["train", "test"],
+                        help="Which split to compute alignment on (default: test).")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
@@ -77,13 +81,24 @@ def main() -> int:
         dataset_root = Path(args.dataset_root)
         metadata = parse_cub_metadata(dataset_root)
         validate_cub_metadata(metadata)
-        train_df, _, _ = split_cub_metadata(metadata)
+        train_df, test_df, _ = split_cub_metadata(metadata)
 
-        train_image_ids = train_df["image_id"].values
-        A_train, attr_names = build_attribute_matrix(dataset_root, train_image_ids)
-        logging.info("Attribute matrix shape: %s, %s attributes", A_train.shape, len(attr_names))
+        if args.split == "test":
+            split_df = test_df
+            Z = np.load(args.features_dir / "Z_test.npy", mmap_mode="r")
+        else:
+            split_df = train_df
+            Z = np.load(args.features_dir / "Z_train.npy", mmap_mode="r")
 
-        Z_train = np.load(args.features_dir / "Z_train.npy", mmap_mode="r")
+        split_image_ids = split_df["image_id"].values
+        A, attr_names = build_attribute_matrix(
+            dataset_root, split_image_ids, min_certainty=args.min_certainty,
+        )
+        logging.info(
+            "Attribute matrix shape: %s, %s attributes (split=%s, min_certainty=%s)",
+            A.shape, len(attr_names), args.split, args.min_certainty,
+        )
+
         final_test_results = load_json(args.results_dir / "final_test_results.json")
 
         rng = np.random.default_rng(RANDOM_SEED)
@@ -99,7 +114,7 @@ def main() -> int:
                 "Computing alignment for delta=%s (%s features)", delta, len(feature_indices),
             )
 
-            auroc_matrix = compute_feature_attribute_auroc(Z_train, A_train, feature_indices)
+            auroc_matrix = compute_feature_attribute_auroc(Z, A, feature_indices)
             logging.info("AUROC matrix shape: %s", auroc_matrix.shape)
 
             matches = best_matched_attributes(auroc_matrix, attr_names)
@@ -111,7 +126,7 @@ def main() -> int:
 
             logging.info("Running %s permutation trials for delta=%s", args.n_permutations, delta)
             perm_aurocs = permutation_baseline(
-                Z_train, A_train, feature_indices, args.n_permutations, rng,
+                Z, A, feature_indices, args.n_permutations, rng,
             )
             perm_best_mean = float(np.nanmean(perm_aurocs))
             perm_best_std = float(np.nanstd(perm_aurocs))
@@ -125,6 +140,8 @@ def main() -> int:
 
             alignment_result = {
                 "delta": delta,
+                "split": args.split,
+                "min_certainty": args.min_certainty,
                 "n_features": len(feature_indices),
                 "mean_best_auroc": float(best_scores_arr.mean()) if len(best_scores_arr) > 0 else None,
                 "median_best_auroc": float(np.median(best_scores_arr)) if len(best_scores_arr) > 0 else None,

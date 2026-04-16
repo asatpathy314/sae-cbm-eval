@@ -3,6 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any, Iterable
 
+import logging
+
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
@@ -16,12 +18,14 @@ def build_multinomial_logreg(
     C: float,
     max_iter: int,
     random_state: int,
+    verbose: int = 0,
 ) -> LogisticRegression:
     kwargs: dict[str, Any] = {
         "C": C,
         "solver": "lbfgs",
         "max_iter": max_iter,
         "random_state": random_state,
+        "verbose": verbose,
     }
     # sklearn 1.8 removed the explicit `multi_class` kwarg. With lbfgs and a
     # multiclass target, it now selects multinomial behavior implicitly.
@@ -71,11 +75,16 @@ def cross_validate_regularization(
     results: dict[str, Any] = {}
     ordered_candidates = [float(c) for c in c_candidates]
 
-    for C in ordered_candidates:
+    for ci, C in enumerate(ordered_candidates, 1):
+        logging.info(
+            "CV candidate %s/%s: C=%s (%s-fold)",
+            ci, len(ordered_candidates), C, n_splits,
+        )
         clf = build_multinomial_logreg(
             C=C,
             max_iter=max_iter,
             random_state=random_state,
+            verbose=1,
         )
         result = cross_validate(
             clf,
@@ -87,13 +96,18 @@ def cross_validate_regularization(
             n_jobs=n_jobs,
         )
         fold_iters = [summarize_iterations(est) for est in result["estimator"]]
+        mean_acc = float(result["test_score"].mean())
         results[str(C)] = {
-            "mean_acc": float(result["test_score"].mean()),
+            "mean_acc": mean_acc,
             "std_acc": float(result["test_score"].std()),
             "fold_accs": [float(x) for x in result["test_score"].tolist()],
             "fold_iters": fold_iters,
             "converged": bool(all(it < max_iter for it in fold_iters)),
         }
+        logging.info(
+            "  C=%s done: mean_acc=%.4f, iters=%s",
+            C, mean_acc, fold_iters,
+        )
 
     best_C = max(ordered_candidates, key=lambda c: results[str(c)]["mean_acc"])
     return results, float(best_C)

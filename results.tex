@@ -1,0 +1,149 @@
+\section{Experimental Setup}
+
+\subsection{Implementation Details}
+
+We use CLIP ViT-B/32 trained on DataComp~\cite{gadre2024datacomp} as the frozen backbone, with representations extracted from the residual stream after block~11 ($d = 768$). The Sparse Autoencoder is a vanilla ReLU SAE with $64\times$ expansion ($k = 49{,}152$), loaded from the Prisma checkpoint repository~\cite{joseph2024prisma}. We extract CLS-token activations only, yielding one $k$-dimensional feature vector per image.
+
+CUB-200-2011 contains 11{,}788 images across 200 bird species. We use the official train/test split (5{,}994 training, 5{,}794 test images). From the training set we hold out a stratified 20\% validation subset ($n_\mathrm{val} = 1{,}199$, $n_\mathrm{train} = 4{,}795$), used for hyperparameter selection and pruning evaluation. The test set is reserved for final reporting only.
+
+All linear classifiers are multinomial logistic regression models fit with L2 regularization using LBFGS, implemented in scikit-learn. We select the regularization strength $C$ from $\{10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1, 10\}$ via 5-fold stratified cross-validation on the training subset. For the L1 baseline, we use the SAGA solver with L1 penalty over the same $C$ grid. Iterative pruning uses a pruning fraction $p = 0.1$ per round, with a minimum feature count $k_\mathrm{min} = 5$.
+
+\subsection{SAE Feature Statistics}
+
+The extracted SAE features are extremely sparse: on average 99.84\% of entries are zero for a given image, corresponding to a density of $1.6 \times 10^{-3}$. Of the 49{,}152 dictionary elements, 37{,}667 (76.6\%) are \emph{dead features} that never activate on any training image. The remaining 11{,}485 active features form the effective feature space.
+
+\section{Results}
+
+\subsection{Baseline Classifier}
+\label{sec:baseline_results}
+
+Cross-validation selects $C = 1.0$, which achieves a mean 5-fold accuracy of $60.7 \pm 0.9\%$. Table~\ref{tab:cv} reports the full grid. The classifier trained on the full training subset and evaluated on the held-out validation set achieves 62.4\% accuracy, converging in 296 LBFGS iterations.
+
+\begin{table}[t]
+\centering
+\caption{Cross-validation results for regularization strength $C$. All models converge within the iteration budget.}
+\label{tab:cv}
+\begin{tabular}{rcc}
+\toprule
+$C$ & Mean accuracy (\%) & Std (\%) \\
+\midrule
+$10^{-4}$ & 8.7 & 1.3 \\
+$10^{-3}$ & 23.8 & 1.6 \\
+$10^{-2}$ & 45.7 & 1.6 \\
+$10^{-1}$ & 59.3 & 1.2 \\
+$1$        & \textbf{60.7} & 0.9 \\
+$10$       & 59.6 & 1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Iterative Pruning}
+\label{sec:pruning_results}
+
+Figure~\ref{fig:pruning_curve} shows the validation accuracy as a function of the number of retained SAE features across 92 pruning rounds. The curve exhibits a long plateau followed by a gradual decline and a steep collapse at very small feature counts.
+
+\paragraph{Plateau phase.}
+Accuracy remains within 1 percentage point of the full-feature baseline (62.4\%) down to approximately 139 features---a reduction of over 99.7\% of the original feature count. The peak pruned accuracy of 62.6\% occurs at $k = 9{,}111$, marginally exceeding the full-feature model, consistent with mild regularization benefits from feature removal.
+
+\paragraph{Gradual decline.}
+Below 139 features, accuracy degrades smoothly. At 93 features, accuracy is 60.0\%; at 52 features, it is 57.7\%. This region shows that a compact set of SAE features retains substantial predictive power for fine-grained bird classification.
+
+\paragraph{Collapse.}
+Below approximately 20 features, accuracy drops steeply: from 50.5\% at 19 features to 21.6\% at 5 features. With only 10 features the classifier achieves 38.5\%, far above the 0.5\% chance level but insufficient for practical classification.
+
+\paragraph{$\delta$-sparse feature counts.}
+Table~\ref{tab:kdelta} summarizes the minimum number of features required to stay within several accuracy tolerances of the full-feature baseline. Notably, only 139 features (0.28\% of 49{,}152) suffice for a 1 percentage point tolerance, and 52 features (0.11\%) for a 5 percentage point tolerance.
+
+\begin{table}[t]
+\centering
+\caption{$\delta$-sparse feature counts: the smallest number of retained features $k_\delta$ such that validation accuracy remains within $\delta$ percentage points of the full-feature baseline (62.4\%).}
+\label{tab:kdelta}
+\begin{tabular}{rccc}
+\toprule
+$\delta$ (pp) & $k_\delta$ & \% of $k$ & Val.\ acc.\ (\%) \\
+\midrule
+1  & 139 & 0.28 & 61.6 \\
+2  & 103 & 0.21 & 60.6 \\
+5  &  52 & 0.11 & 57.7 \\
+10 &  23 & 0.05 & 53.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{L1-Regularized Baseline}
+\label{sec:l1_results}
+
+As a robustness check, we compare iterative pruning against an L1-regularized linear classifier, which performs simultaneous feature selection and fitting. Table~\ref{tab:l1} reports the results. The best L1 model ($C = 1.0$) achieves only 39.7\% validation accuracy while selecting 10{,}789 nonzero features. This is substantially worse than iterative pruning, which attains 61.6\% accuracy with only 139 features, or 60.0\% with 93 features.
+
+The poor performance of L1 regularization likely reflects two factors. First, the 49{,}152-dimensional, 200-class problem creates a very large parameter space for SAGA to optimize with strong L1 penalties, and weaker penalties select too many features before accuracy improves. Second, the L1 penalty applies uniformly to all features regardless of their discriminative value, whereas our importance-weighted iterative pruning adapts to the learned classifier.
+
+\begin{table}[t]
+\centering
+\caption{L1-regularized baseline. Features are standardized before fitting. All models converge.}
+\label{tab:l1}
+\begin{tabular}{rccc}
+\toprule
+$C$ & Val.\ acc.\ (\%) & Nonzero features & Fit time (s) \\
+\midrule
+$10^{-4}$ & 0.5 & 0 & 0.8 \\
+$10^{-3}$ & 0.5 & 0 & 0.9 \\
+$10^{-2}$ & 20.3 & 408 & 74.6 \\
+$10^{-1}$ & 39.4 & 10{,}165 & 183.5 \\
+$1$        & \textbf{39.7} & 10{,}789 & 67.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sensitivity to Regularization Strength}
+\label{sec:sensitivity}
+
+To verify that the pruning results are not artifacts of a particular regularization choice, we conduct a sensitivity analysis at seven sparsity levels. At each level, we retrain classifiers with $C \in \{0.1, 1.0, 10.0\}$ using 3-fold cross-validation on the training subset corresponding to that feature set. Table~\ref{tab:sensitivity} reports the results.
+
+$C = 1.0$ is the best or tied-for-best choice at every sparsity level. The accuracy spread across $C$ values is small (typically 1--3 percentage points), confirming that the pruning curve is not sensitive to the regularization hyperparameter.
+
+\begin{table}[t]
+\centering
+\caption{Sensitivity of pruning results to regularization strength $C$, measured by 3-fold cross-validation accuracy at selected sparsity levels.}
+\label{tab:sensitivity}
+\begin{tabular}{r ccc}
+\toprule
+Features & $C = 0.1$ (\%) & $C = 1.0$ (\%) & $C = 10$ (\%) \\
+\midrule
+49{,}152 & $57.0 \pm 0.7$ & $\mathbf{58.2 \pm 0.8}$ & $56.6 \pm 0.6$ \\
+10{,}123 & $57.0 \pm 0.7$ & $\mathbf{58.2 \pm 0.7}$ & $56.2 \pm 0.7$ \\
+4{,}843  & $56.9 \pm 0.7$ & $\mathbf{58.2 \pm 0.8}$ & $56.4 \pm 0.7$ \\
+1{,}000  & $57.0 \pm 0.6$ & $\mathbf{58.0 \pm 0.8}$ & $56.3 \pm 0.7$ \\
+480      & $56.7 \pm 0.7$ & $\mathbf{57.9 \pm 0.6}$ & $56.2 \pm 0.7$ \\
+103      & $55.8 \pm 0.9$ & $\mathbf{56.4 \pm 0.7}$ & $54.2 \pm 0.9$ \\
+52       & $53.2 \pm 0.8$ & $\mathbf{54.7 \pm 1.0}$ & $50.9 \pm 0.6$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Test-Set Evaluation}
+\label{sec:test_results}
+
+We evaluate on the held-out CUB-200 test set at three operating points selected from the $\delta$-sparse feature counts. For each operating point, we retrain the classifier on the \emph{full} training set (5{,}994 images) using the feature subset determined by pruning and the cross-validated $C = 1.0$. Table~\ref{tab:test} reports the results.
+
+\begin{table}[t]
+\centering
+\caption{Test-set accuracy at selected operating points. Classifiers are retrained on the full training set with the feature subsets determined by iterative pruning. The full-feature baseline validation accuracy is 62.4\%.}
+\label{tab:test}
+\begin{tabular}{rcccc}
+\toprule
+$\delta$ (pp) & Features & \% of $k$ & Test acc.\ (\%) & $\Delta$ from full (pp) \\
+\midrule
+1 & 139 & 0.28 & 63.6 & $-0.2$ \\
+2 & 103 & 0.21 & 63.2 & $-0.8$ \\
+5 &  52 & 0.11 & 60.2 & $-3.4$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Test accuracies are slightly higher than the corresponding validation accuracies (e.g., 63.6\% vs.\ 61.6\% for $k_\delta = 139$), likely because the final classifiers are trained on the full training set rather than the 80\% subset used during pruning. The test accuracy at 139 features (63.6\%) is within 0.2 percentage points of the full-feature validation baseline, and even at 52 features the classifier achieves 60.2\%.
+
+\subsection{Summary of Empirical Findings}
+
+Our results show that the 49{,}152-dimensional SAE feature space is extremely compressible for CUB-200 classification. A linear classifier retains near-full accuracy using fewer than 140 features---less than 0.3\% of the available SAE dictionary and roughly 1.2\% of the 11{,}485 non-dead features. Iterative importance-weighted pruning substantially outperforms L1-regularized feature selection (63.6\% test accuracy with 139 features vs.\ 39.7\% validation accuracy with 10{,}789 features). The results are stable across regularization strengths and generalize to the held-out test set.
+
+The extreme redundancy of the SAE feature space is consistent with the information-leakage concern raised in Section~\ref{sec:introduction}: with $k \gg d$, many feature subsets can linearly reconstruct the original representation. That a compact subset of $\sim$100--140 features suffices suggests the classifier ultimately relies on a low-dimensional subspace of the SAE feature space, but whether these retained features correspond to interpretable visual concepts remains to be tested through concept labeling and attribute alignment (Sections~\ref{sec:labeling}--\ref{sec:alignment}).

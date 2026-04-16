@@ -174,8 +174,16 @@ def main() -> int:
             delta = op_result["delta"]
             if delta not in args.operating_points:
                 continue
+
+            op_dir = output_dir / f"delta_{delta}"
+            prompts_output = op_dir / "prompts.json"
+            if prompts_output.exists() and not args.overwrite:
+                raise FileExistsError(
+                    f"Output exists: {prompts_output}. Use --overwrite."
+                )
+
             feature_indices = np.array(op_result["active_feature_indices"], dtype=np.int64)
-            op_dir = ensure_dir(output_dir / f"delta_{delta}")
+            op_dir = ensure_dir(op_dir)
             logging.info(
                 "Processing delta=%s with %s features", delta, len(feature_indices),
             )

@@ -128,51 +128,44 @@ def plot_alignment_histogram(
     plt.close(fig)
 
 
-def plot_semantic_scatter(
+def plot_high_quality_bar(
     results_dir: Path,
     figures_dir: Path,
 ) -> None:
-    """Scatter plot of AUROC vs CLIP text similarity for labeled features."""
+    """Bar chart of high-quality concept fractions across operating points."""
     agreement_path = results_dir / "semantic_agreement.json"
     if not agreement_path.exists():
-        logging.warning("No semantic agreement results found, skipping scatter plot.")
+        logging.warning("No semantic agreement results found, skipping bar chart.")
         return
 
     agreement_results = load_json(agreement_path)
     if not agreement_results:
         return
 
-    data = agreement_results[0]
-    features = data["feature_agreements"]
+    deltas = []
+    fracs = []
+    labels = []
+    for data in agreement_results:
+        n_hq = data["n_high_quality"]
+        n_total = data["n_labeled"]
+        deltas.append(data["delta"])
+        fracs.append(data["frac_high_quality"] * 100.0)
+        labels.append(f"{n_hq}/{n_total}")
 
-    aurocs = []
-    sims = []
-    for f in features:
-        if f.get("best_auroc") is not None and f.get("clip_sim") is not None:
-            aurocs.append(f["best_auroc"])
-            sims.append(f["clip_sim"])
+    fig, ax = plt.subplots(figsize=(max(4, len(deltas) * 1.5), 4))
+    bars = ax.bar(range(len(deltas)), fracs, color="steelblue", edgecolor="white")
+    ax.set_xticks(range(len(deltas)))
+    ax.set_xticklabels([f"delta={d}" for d in deltas], fontsize=9)
+    ax.set_ylabel("High-quality concepts (%)")
+    ax.set_title("Fraction of High-Quality Concepts by Operating Point")
+    ax.set_ylim(0, 100)
 
-    if not aurocs:
-        return
-
-    fig, ax = plt.subplots(figsize=(6, 5))
-    colors = ["tab:green" if (a >= data["auroc_threshold"] and s >= data["sim_threshold"])
-               else "tab:gray" for a, s in zip(aurocs, sims)]
-    ax.scatter(aurocs, sims, c=colors, alpha=0.6, edgecolors="white", linewidths=0.5, s=40)
-    ax.axvline(data["auroc_threshold"], color="orange", linestyle="--", alpha=0.5)
-    ax.axhline(data["sim_threshold"], color="orange", linestyle="--", alpha=0.5)
-    ax.set_xlabel("Best-match AUROC (activation vs attribute)")
-    ax.set_ylabel("CLIP text similarity (MLLM label vs attribute name)")
-    ax.set_title(f"Joint Concept Quality (delta={data['delta']})")
-
-    n_hq = data["n_high_quality"]
-    n_total = data["n_labeled"]
-    ax.text(0.95, 0.05, f"High-quality: {n_hq}/{n_total} ({100*n_hq/n_total:.0f}%)",
-            transform=ax.transAxes, ha="right", fontsize=9,
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+    for bar, label in zip(bars, labels):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                label, ha="center", va="bottom", fontsize=8)
 
     fig.tight_layout()
-    fig.savefig(figures_dir / "semantic_agreement_scatter.pdf", dpi=300, bbox_inches="tight")
+    fig.savefig(figures_dir / "high_quality_bar.pdf", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -185,14 +178,26 @@ def main() -> int:
     try:
         load_project_env()
 
+        output_files = [
+            figures_dir / "pruning_curve_full.pdf",
+            figures_dir / "alignment_histogram.pdf",
+            figures_dir / "high_quality_bar.pdf",
+        ]
+        existing = [p for p in output_files if p.exists()]
+        if existing and not args.overwrite:
+            joined = ", ".join(str(p) for p in existing)
+            raise FileExistsError(
+                f"Output files already exist: {joined}. Use --overwrite."
+            )
+
         plot_enhanced_pruning_curve(results_dir, figures_dir)
         logging.info("Wrote pruning_curve_full.pdf")
 
         plot_alignment_histogram(results_dir, figures_dir)
         logging.info("Wrote alignment_histogram.pdf")
 
-        plot_semantic_scatter(results_dir, figures_dir)
-        logging.info("Wrote semantic_agreement_scatter.pdf")
+        plot_high_quality_bar(results_dir, figures_dir)
+        logging.info("Wrote high_quality_bar.pdf")
 
         write_run_manifest(
             script_name=SCRIPT_NAME,

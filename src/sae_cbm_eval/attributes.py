@@ -6,10 +6,23 @@ import numpy as np
 import pandas as pd
 
 
+def _resolve_attributes_dir(dataset_root: Path) -> Path:
+    """Return the directory containing attribute files, with fallback."""
+    standard = dataset_root / "attributes"
+    if (standard / "attributes.txt").exists():
+        return standard
+    fallback = dataset_root.parent
+    if (fallback / "attributes.txt").exists():
+        return fallback
+    raise FileNotFoundError(
+        f"attributes.txt not found at {standard / 'attributes.txt'} "
+        f"or fallback {fallback / 'attributes.txt'}"
+    )
+
+
 def parse_attribute_names(dataset_root: Path) -> pd.DataFrame:
-    path = dataset_root / "attributes" / "attributes.txt"
-    if not path.exists():
-        raise FileNotFoundError(f"Attribute names file not found: {path}")
+    attrs_dir = _resolve_attributes_dir(dataset_root)
+    path = attrs_dir / "attributes.txt"
     rows = []
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -21,7 +34,8 @@ def parse_attribute_names(dataset_root: Path) -> pd.DataFrame:
 
 
 def parse_image_attribute_labels(dataset_root: Path) -> pd.DataFrame:
-    path = dataset_root / "attributes" / "image_attribute_labels.txt"
+    attrs_dir = _resolve_attributes_dir(dataset_root)
+    path = attrs_dir / "image_attribute_labels.txt"
     if not path.exists():
         raise FileNotFoundError(f"Image attribute labels file not found: {path}")
     df = pd.read_csv(
@@ -44,10 +58,15 @@ def parse_image_attribute_labels(dataset_root: Path) -> pd.DataFrame:
 def build_attribute_matrix(
     dataset_root: Path,
     image_ids: np.ndarray,
+    *,
+    min_certainty: int | None = None,
 ) -> tuple[np.ndarray, list[str]]:
     """Build a (n_images, 312) binary attribute matrix aligned with image_ids."""
     attr_names_df = parse_attribute_names(dataset_root)
     labels_df = parse_image_attribute_labels(dataset_root)
+
+    if min_certainty is not None:
+        labels_df = labels_df[labels_df["certainty_id"] >= min_certainty]
 
     n_attrs = len(attr_names_df)
 

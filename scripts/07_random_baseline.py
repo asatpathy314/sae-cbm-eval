@@ -54,7 +54,8 @@ def parse_args() -> argparse.Namespace:
         "--feature-counts",
         nargs="+",
         type=int,
-        default=DEFAULT_FEATURE_COUNTS,
+        default=None,
+        help="Feature counts to evaluate. Auto-derived from final_test_results.json if omitted.",
     )
     parser.add_argument(
         "--n-trials",
@@ -101,6 +102,24 @@ def main() -> int:
         Z_val = np.ascontiguousarray(Z_train[val_idx], dtype=np.float32)
         y_tr = np.asarray(y_train[train_idx], dtype=np.int64)
         y_val = np.asarray(y_train[val_idx], dtype=np.int64)
+
+        if args.feature_counts is None:
+            ftr_path = args.stage3_results_dir / "final_test_results.json"
+            if ftr_path.exists():
+                ftr_data = load_json(ftr_path)
+                args.feature_counts = [
+                    len(op["active_feature_indices"]) for op in ftr_data
+                ]
+                logging.info(
+                    "Auto-derived feature counts from final_test_results.json: %s",
+                    args.feature_counts,
+                )
+            else:
+                args.feature_counts = DEFAULT_FEATURE_COUNTS
+                logging.info(
+                    "final_test_results.json not found, using defaults: %s",
+                    args.feature_counts,
+                )
 
         active_mask = np.any(Z_tr != 0.0, axis=0)
         active_indices = np.flatnonzero(active_mask)

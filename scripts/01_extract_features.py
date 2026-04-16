@@ -28,7 +28,7 @@ from sae_cbm_eval.constants import (
     SAE_CONFIG_FILENAME,
     SAE_REPO_ID,
     SAE_WEIGHT_FILENAME,
-    TOKEN_POLICY_ALL_MAXPOOL,
+    TOKEN_POLICY_CLS_ONLY,
 )
 from sae_cbm_eval.cub import (
     CUBImageDataset,
@@ -255,7 +255,7 @@ def build_extraction_meta(
         "image_size": 224,
         "hook_name": EXPECTED_HOOK_NAME,
         "layer": EXPECTED_HOOK_LAYER,
-        "token_policy": TOKEN_POLICY_ALL_MAXPOOL,
+        "token_policy": TOKEN_POLICY_CLS_ONLY,
         "n_features": EXPECTED_SAE_DIM,
         "input_dim": EXPECTED_INPUT_DIM,
         "vit_prisma_version": get_package_version("vit-prisma"),

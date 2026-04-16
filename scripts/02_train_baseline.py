@@ -26,7 +26,7 @@ from sae_cbm_eval.constants import (
     HEURISTIC_MIN_BASELINE_VAL_ACC,
     RANDOM_SEED,
     SAE_REPO_ID,
-    TOKEN_POLICY_ALL_MAXPOOL,
+    TOKEN_POLICY_CLS_ONLY,
 )
 from sae_cbm_eval.runtime import (
     configure_runtime_logging,
@@ -142,9 +142,9 @@ def validate_stage1_outputs(
             f"Expected y_train shape {(EXPECTED_TRAIN_IMAGES,)}, observed {tuple(y_train.shape)}"
         )
 
-    if extraction_meta.get("token_policy") != TOKEN_POLICY_ALL_MAXPOOL:
+    if extraction_meta.get("token_policy") != TOKEN_POLICY_CLS_ONLY:
         raise ValueError(
-            "Stage 1 extraction metadata did not record the required all-tokens-maxpool policy."
+            "Stage 1 extraction metadata did not record the required CLS-only token policy."
         )
 
     n_classes = int(np.unique(y_train).size)
@@ -238,10 +238,20 @@ def main() -> int:
         )
         write_json(split_indices_path, build_split_payload(train_idx, val_idx))
 
-        Z_tr = np.ascontiguousarray(Z_train[train_idx], dtype=np.float32)
-        Z_val = np.ascontiguousarray(Z_train[val_idx], dtype=np.float32)
+        Z_tr_full = np.ascontiguousarray(Z_train[train_idx], dtype=np.float32)
+        Z_val_full = np.ascontiguousarray(Z_train[val_idx], dtype=np.float32)
         y_tr = np.asarray(y_train[train_idx], dtype=np.int64)
         y_val = np.asarray(y_train[val_idx], dtype=np.int64)
+
+        # Drop dead (all-zero) features to speed up CV and fitting
+        live_mask = np.any(Z_tr_full != 0.0, axis=0)
+        live_indices = np.flatnonzero(live_mask)
+        Z_tr = Z_tr_full[:, live_indices]
+        Z_val = Z_val_full[:, live_indices]
+        logging.info(
+            "Dropped %s dead features, fitting on %s live features",
+            int((~live_mask).sum()), len(live_indices),
+        )
 
         logging.info(
             "Running %s-fold CV on %s train rows with %s candidate C values",

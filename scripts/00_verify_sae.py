@@ -160,7 +160,9 @@ def verify_matching_clip_config(clip_model_id: str) -> dict[str, Any]:
     )
     expect_equal(problems, "clip_cfg.image_size", image_size, 224)
     expect_equal(problems, "clip_cfg.patch_size", patch_size, 32)
-    expect_equal(problems, "clip token count", token_count, EXPECTED_CONTEXT_SIZE)
+    # CLIP always produces 50 tokens (49 patches + CLS); SAE context_size may differ
+    # (e.g. 1 for CLS-only SAEs). Validate CLIP token count independently.
+    expect_equal(problems, "clip token count", token_count, 50)
 
     return {
         "clip_config_type": type(clip_cfg).__name__,
@@ -174,7 +176,9 @@ def verify_matching_clip_config(clip_model_id: str) -> dict[str, Any]:
 
 
 def verify_weight_shapes(weights_path: Path) -> dict[str, Any]:
-    state_dict = torch.load(weights_path, map_location="cpu", weights_only=False)
+    raw = torch.load(weights_path, map_location="cpu", weights_only=False)
+    # Handle both flat state dicts and nested {cfg, state_dict} wrappers
+    state_dict = raw.get("state_dict", raw) if isinstance(raw, dict) and "state_dict" in raw else raw
     problems: list[str] = []
     expected_keys = {"W_enc", "W_dec", "b_enc", "b_dec"}
     observed_keys = set(state_dict.keys())

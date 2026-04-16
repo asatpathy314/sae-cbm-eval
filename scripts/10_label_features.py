@@ -22,7 +22,7 @@ from sae_cbm_eval.runtime import (
 
 
 SCRIPT_NAME = "10_label_features"
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_OPERATING_POINTS = ["0.01"]
 
 
@@ -91,15 +91,32 @@ def label_feature(
     }
 
 
-def is_valid_label(label: str) -> bool:
-    """Check label does not contain species names or non-visual descriptors."""
-    invalid_markers = [
-        "warbler", "sparrow", "finch", "woodpecker", "vireo", "wren",
-        "oriole", "tern", "gull", "hummingbird", "flycatcher",
-        "I cannot", "I can't", "sorry",
-    ]
+def is_refusal(label: str) -> bool:
+    """Fast-path check for obvious refusals."""
     lower = label.lower()
-    return not any(marker in lower for marker in invalid_markers)
+    return any(marker in lower for marker in ("i cannot", "i can't", "sorry"))
+
+
+def validate_label_llm(client, model: str, label: str) -> bool:
+    """Ask an LLM whether the label describes a visual property."""
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Does this label describe a visual property (color, shape, "
+                    "pattern, texture, or body part) rather than naming a specific "
+                    "bird species? Answer yes or no.\n\n"
+                    f"Label: \"{label}\""
+                ),
+            }
+        ],
+        max_tokens=10,
+        temperature=0.0,
+    )
+    answer = response.choices[0].message.content.strip().lower()
+    return answer.startswith("yes")
 
 
 def main() -> int:
@@ -160,12 +177,18 @@ def main() -> int:
 
                 try:
                     result = label_feature(client, args.model, montage_path, entry["prompt"])
-                    valid = is_valid_label(result["label"])
+                    if is_refusal(result["label"]):
+                        valid = False
+                        validation_method = "refusal_heuristic"
+                    else:
+                        valid = validate_label_llm(client, args.model, result["label"])
+                        validation_method = "llm"
                     labels.append({
                         "rank": entry["rank"],
                         "feature_index": entry["feature_index"],
                         "label": result["label"],
                         "valid": valid,
+                        "validation_method": validation_method,
                         "model": result["model"],
                         "usage": result["usage"],
                     })
