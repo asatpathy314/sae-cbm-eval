@@ -4,8 +4,16 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
+# OS junk
+.DS_Store
+
+# Pipeline outputs
 data/
 features/
 figures/
 results/
 exemplars/
+
+# Run logs
+overnight_logs/
+*.log
