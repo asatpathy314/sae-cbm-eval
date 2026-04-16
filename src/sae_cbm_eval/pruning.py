@@ -45,8 +45,12 @@ def iterative_pruning(
     max_rounds: int,
     random_state: int,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    initial_active: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
-    active = np.arange(Z_tr.shape[1], dtype=np.int64)
+    if initial_active is None:
+        active = np.arange(Z_tr.shape[1], dtype=np.int64)
+    else:
+        active = np.asarray(initial_active, dtype=np.int64).copy()
     results: list[dict[str, Any]] = []
 
     for round_idx in range(max_rounds):

@@ -73,7 +73,7 @@ def judge_semantic_match(client, model: str, label: str, attribute: str) -> bool
                 ),
             }
         ],
-        max_tokens=10,
+        max_completion_tokens=10,
         temperature=0.0,
     )
     answer = response.choices[0].message.content.strip().lower()

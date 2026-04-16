@@ -6,23 +6,21 @@ import numpy as np
 import pandas as pd
 
 
-def _resolve_attributes_dir(dataset_root: Path) -> Path:
-    """Return the directory containing attribute files, with fallback."""
-    standard = dataset_root / "attributes"
-    if (standard / "attributes.txt").exists():
+def _resolve_attribute_file(dataset_root: Path, filename: str) -> Path:
+    """Find a CUB attribute file, checking standard location and dataset-root fallback."""
+    standard = dataset_root / "attributes" / filename
+    if standard.exists():
         return standard
-    fallback = dataset_root.parent
-    if (fallback / "attributes.txt").exists():
+    fallback = dataset_root.parent / filename
+    if fallback.exists():
         return fallback
     raise FileNotFoundError(
-        f"attributes.txt not found at {standard / 'attributes.txt'} "
-        f"or fallback {fallback / 'attributes.txt'}"
+        f"{filename} not found at {standard} or fallback {fallback}"
     )
 
 
 def parse_attribute_names(dataset_root: Path) -> pd.DataFrame:
-    attrs_dir = _resolve_attributes_dir(dataset_root)
-    path = attrs_dir / "attributes.txt"
+    path = _resolve_attribute_file(dataset_root, "attributes.txt")
     rows = []
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -34,10 +32,9 @@ def parse_attribute_names(dataset_root: Path) -> pd.DataFrame:
 
 
 def parse_image_attribute_labels(dataset_root: Path) -> pd.DataFrame:
-    attrs_dir = _resolve_attributes_dir(dataset_root)
-    path = attrs_dir / "image_attribute_labels.txt"
-    if not path.exists():
-        raise FileNotFoundError(f"Image attribute labels file not found: {path}")
+    path = _resolve_attribute_file(dataset_root, "image_attribute_labels.txt")
+    # A handful of rows in the CUB attribute labels file have stray extra
+    # fields; skip them rather than failing the whole pipeline.
     df = pd.read_csv(
         path,
         sep=r"\s+",
@@ -51,6 +48,7 @@ def parse_image_attribute_labels(dataset_root: Path) -> pd.DataFrame:
             "time": float,
         },
         engine="python",
+        on_bad_lines="skip",
     )
     return df
 

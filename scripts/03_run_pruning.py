@@ -305,6 +305,18 @@ def main() -> int:
         sigma_tr = compute_sigma_train(Z_tr)
         np.save(output_paths["sigma_train"], sigma_tr)
 
+        # Skip dead features (all-zero columns) at the start of pruning to
+        # avoid wasting compute on features that are guaranteed to be pruned
+        # first (importance 0 due to sigma 0). Feature indices in results
+        # remain in the original 49152-dim SAE space.
+        live_mask = sigma_tr > 0
+        live_indices = np.flatnonzero(live_mask).astype(np.int64)
+        logging.info(
+            "Dropped %s dead features before pruning; starting from %s live features",
+            int((~live_mask).sum()),
+            int(len(live_indices)),
+        )
+
         logging.info(
             "Running pruning with best_C=%s, prune_fraction=%s, k_min=%s",
             best_C,
@@ -324,6 +336,7 @@ def main() -> int:
             max_rounds=args.max_rounds,
             random_state=RANDOM_SEED,
             progress_callback=build_progress_logger(args.max_iter),
+            initial_active=live_indices,
         )
 
         curve = build_pruning_curve(results)
